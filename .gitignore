@@ -1,0 +1,23 @@
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.sln.docstates
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+Win32/
+*.obj
+*.pdb
+*.exe
+*.lib
+*.dll
+*.ilk
+*.tlog
+*.log
+*.pch
+
+# Other
+*.ncb
