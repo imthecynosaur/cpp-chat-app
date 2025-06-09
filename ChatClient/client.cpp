@@ -62,6 +62,7 @@ int main() {
 		std::getline(std::cin, userInput);
 		if (userInput == "quit") {
 			closesocket(clientSocket);
+			clientSocket = INVALID_SOCKET;
 			break;
 		}
 		if (userInput.empty()) {
@@ -92,10 +93,12 @@ int main() {
 		}
 	}
 
-	std::cout << "closing socket" << std::endl;
-	result = closesocket(clientSocket);
-	if (result == SOCKET_ERROR) {
-		std::cerr << "failed to close socket, error: " << WSAGetLastError() << std::endl;
+	if (clientSocket != INVALID_SOCKET) {
+		std::cout << "closing socket" << std::endl;
+		result = closesocket(clientSocket);
+		if (result == SOCKET_ERROR) {
+			std::cerr << "failed to close socket, error: " << WSAGetLastError() << std::endl;
+		}
 	}
 
 	WSACleanup();
