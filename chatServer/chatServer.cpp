@@ -22,31 +22,34 @@ SocketWrapper createListenSocket(addrinfo* serveraddr);
 
 void handleClient(SocketWrapper clientSocket);
 
+struct AddrInfoDeletr {
+	void operator() (addrinfo* ptr) const{
+		if (ptr) {
+			std::cout << "AddrInfoDeleter being called" << std::endl;
+			freeaddrinfo(ptr);
+		}
+	}
+};
+
 
 int main() {
 	try {
 		WSAWrapper wsa;
-		addrinfo* serveraddr = nullptr;
-		resolveAddr(DEFAULT_PORT, serveraddr);
+		addrinfo* rawAddrPtr = nullptr;
+		resolveAddr(DEFAULT_PORT, rawAddrPtr);
+		std::unique_ptr<addrinfo, AddrInfoDeletr> serveraddr(rawAddrPtr);
+		SocketWrapper listenSocket = createListenSocket(serveraddr.get());
 
-		try {
-			SocketWrapper listenSocket = createListenSocket(serveraddr);
+		std::cout << "-------------------------" << std::endl;
+		std::cout << "Waiting for incoming connections..." << std::endl;
 
-			std::cout << "-------------------------" << std::endl;
-			std::cout << "Waiting for incoming connections..." << std::endl;
-
-			SocketWrapper clientSocket(accept(listenSocket, NULL, NULL));
-			if (clientSocket == INVALID_SOCKET) {
-				throw WinsockException("accept failed.", WSAGetLastError());
-			}
-			std::cout << "Client Connected! Socket ID: " << clientSocket << std::endl;
-			handleClient(std::move(clientSocket));
+		SocketWrapper clientSocket(accept(listenSocket, NULL, NULL));
+		if (clientSocket == INVALID_SOCKET) {
+			throw WinsockException("accept failed.", WSAGetLastError());
 		}
-		catch (...) {
-			freeaddrinfo(serveraddr);
-			throw;
-		}
-		freeaddrinfo(serveraddr);
+		std::cout << "Client Connected! Socket ID: " << clientSocket << std::endl;
+		handleClient(std::move(clientSocket));
+		
 	}
 	catch(const std::exception& e){
 		std::cerr << "Error: " << e.what() << std::endl;
@@ -107,7 +110,7 @@ void handleClient(SocketWrapper clientSocket) {
 			std::cout << clientSocket << " said: " << clientMessage << std::endl;
 
 			std::string serverResponse = "Server received: " + clientMessage;
-			int sendResult = send(clientSocket, serverResponse.c_str(), int(sizeof(serverResponse)), 0);
+			int sendResult = send(clientSocket, serverResponse.c_str(), static_cast<int>(serverResponse.length()), 0);
 			if (sendResult == SOCKET_ERROR) {
 				std::cerr << "send failed with error: " << WSAGetLastError() << std::endl;
 				break;

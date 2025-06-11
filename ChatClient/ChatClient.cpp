@@ -1,132 +1,118 @@
-//#define WIN32_LEAN_AND_MEAN
-//
-//#include <Windows.h>
-//#include <WinSock2.h>
-//#include <WS2tcpip.h>
-//#include <iostream>
-//#include <string>
-//#include <vector>
-//
-//#define SERVER_ADDRESS "127.0.0.1"
-//#define DEFAULT_PORT "8080"
-//#define BUFFER_LEN 512
-//
-//int main() {
-//	WSADATA wsaData;
-//	int result;
-//
-//	SOCKET ClientSocket = INVALID_SOCKET;
-//
-//	struct addrinfo* addressresult = nullptr;
-//	struct addrinfo* addressIterator= nullptr;
-//	struct addrinfo hints;
-//
-//	char recvbuf[BUFFER_LEN];
-//
-//	result = WSAStartup(MAKEWORD(2, 2), &wsaData);
-//	if (result != 0) {
-//		std::cerr << "WSAStartup failed with error: " << result << std::endl;
-//		return 1;
-//	}
-//	std::cout << "WinSock initialized." << std::endl;
-//
-//	ZeroMemory(&hints, sizeof(hints));
-//	hints.ai_family = AF_UNSPEC;
-//	hints.ai_socktype = SOCK_STREAM;
-//	hints.ai_protocol = IPPROTO_TCP;
-//
-//	result = getaddrinfo(SERVER_ADDRESS, DEFAULT_PORT, &hints, &addressresult);
-//	if (result != 0) {
-//		std::cerr << "getaddrinfo failed with error: " << result << std::endl;
-//		WSACleanup();
-//		return 1;
-//	}
-//	std::cout << "Server address info resolved." << std::endl;
-//
-//	for (addressIterator = addressresult; addressIterator != nullptr; addressIterator = addressIterator->ai_next) {
-//		ClientSocket = socket(addressIterator->ai_family, addressIterator->ai_socktype, addressIterator->ai_protocol);
-//		if (ClientSocket == INVALID_SOCKET) {
-//			std::cerr << "Socket creation faild with error: " << WSAGetLastError() << std::endl;
-//			freeaddrinfo(addressresult);
-//			WSACleanup();
-//			return 1;
-//		}
-//
-//		std::cout << "Attempting to connect to server..." << std::endl;
-//		result = connect(ClientSocket, addressIterator->ai_addr, (int)addressIterator->ai_addrlen);
-//		if (result == SOCKET_ERROR) {
-//			std::cerr << "Connect failed with error: " << WSAGetLastError() << std::endl;
-//			closesocket(ClientSocket);      // Close this socket attempt
-//			ClientSocket = INVALID_SOCKET; // Mark as invalid
-//			continue;
-//		}
-//		std::cout << "Successfully connected to server!" << std::endl;
-//		break; // If connected, no need to try further addresses
-//	}
-//
-//	freeaddrinfo(addressresult);
-//
-//	if (ClientSocket == INVALID_SOCKET) {
-//		std::cerr << "Unable to connect to server after trying all addresses!" << std::endl;
-//		WSACleanup();
-//		return 1;
-//	}
-//
-//	std::string userInput;
-//
-//	do {
-//		std::cout << "Eter message (or type 'exit' to quit): ";
-//		std::getline(std::cin, userInput);
-//
-//		if (userInput == "exit") {
-//			std::cout << "Exiting..." << std::endl;
-//			break;
-//		}
-//
-//		if (userInput.empty()) {
-//			continue;
-//		}
-//
-//		result = send(ClientSocket, userInput.c_str(), (int)userInput.length(), 0);
-//		if (result == SOCKET_ERROR) {
-//			std::cerr << "send failed with error: " << WSAGetLastError() << std::endl;
-//			closesocket(ClientSocket);
-//			WSACleanup();
-//			return 1;
-//		}
-//		std::cout << "Bytes Sent: " << result << std::endl;
-//
-//		result = recv(ClientSocket, recvbuf, BUFFER_LEN, 0);
-//		if (result > 0) {
-//			recvbuf[result] = '\0';
-//			std::cout << "Server response: " << recvbuf << std::endl;
-//		}
-//		else if (result == 0) {
-//			std::cout << "Connection closed by server." << std::endl;
-//			break;
-//		}
-//		else {
-//			std::cerr << "recv failed with error: " << WSAGetLastError() << std::endl;
-//			break;
-//		}
-//	} while (true);
-//
-//	std::cout << "Closing client socket..." << std::endl;
-//	result = closesocket(ClientSocket);
-//	if (result == SOCKET_ERROR) {
-//		std::cerr << "closesocket failed with error: " << WSAGetLastError() << std::endl;
-//		// Continue to WSACleanup
-//	}
-//
-//	WSACleanup();
-//	std::cout << "Winsock cleaned up." << std::endl;
-//
-//	std::cout << "Press Enter to exit client...";
-//	// A std::cin.ignore() might be needed here if the last std::getline left a newline
-//	// in the buffer, but often std::cin.get() will just consume that.
-//	// For robustness with mixed cin/getline, an ignore is good practice.
-//	// std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); 
-//	std::cin.get();
-//
-//	return 0;
-//}
+#define WIN32_LEAN_AND_MEAN
+
+#include <Windows.h>
+#include <WinSock2.h>
+#include <WS2tcpip.h>
+#include <iostream>
+#include <string>
+#include <vector>
+
+#include "WinsockException.h"
+#include "SocketWrapper.h"
+#include "WSAWrapper.h"
+
+constexpr const char* SERVER_ADDRESS = "127.0.0.1";
+constexpr const char* DEFAULT_PORT = "8080";
+constexpr int BUFFER_LEN = 512;
+
+void resolveServerAddr(addrinfo*& serverAddrinfo);
+SocketWrapper createClientSocket(addrinfo* serverAddrinfo);
+void handleServer(SocketWrapper clientSocket);
+
+struct AddrInfoDeleter {
+	void operator() (addrinfo* ptr) const {
+		std::cout << "AddrInfoDeleter called to free memory." << std::endl;
+		if (ptr) {
+			freeaddrinfo(ptr);
+		}
+	}
+};
+
+int main() {
+	try {
+		WSAWrapper wsaData;
+
+		addrinfo* rawAddrPtr{ nullptr };
+		resolveServerAddr(rawAddrPtr);
+		std::unique_ptr<addrinfo, AddrInfoDeleter> serveraddrinfo(rawAddrPtr);
+		SocketWrapper clientSocket = createClientSocket(serveraddrinfo.get());
+
+		std::cout << "trying to send to server" << std::endl;
+		handleServer(std::move(clientSocket));
+	}
+	catch (const std::exception& e) {
+		std::cerr << "Error: " << e.what() << std::endl;
+		std::cout << "Press Enter to exit." << std::endl;
+		std::cin.get();
+		return 1;
+	}
+	std::cout << "Press Enter to exit." << std::endl;
+	std::cin.get();
+	return 0;
+}
+
+
+
+void resolveServerAddr(addrinfo*& serverAddrinfo) {
+	addrinfo hints;
+	ZeroMemory(&hints, (int)sizeof(hints));
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_protocol = IPPROTO_TCP;
+	int result = getaddrinfo(SERVER_ADDRESS, DEFAULT_PORT, &hints, &serverAddrinfo);
+	if (result != 0) {
+		throw WinsockException("getaddrinfo failed.", result);
+	}
+	std::cout << "server address resolved successfully." << std::endl;
+}
+
+SocketWrapper createClientSocket(addrinfo* serverAddrinfo) {
+	for (addrinfo* addrinfoIt{ serverAddrinfo }; addrinfoIt != nullptr; addrinfoIt = addrinfoIt->ai_next) {
+		SocketWrapper clientSocket(socket(addrinfoIt->ai_family, addrinfoIt->ai_socktype, addrinfoIt->ai_protocol));
+		if (clientSocket == INVALID_SOCKET) {
+			std::cout << "Socket creation failed for one address, trying next..." << std::endl;
+			continue;
+		}
+		std::cout << "client socket created successfully. Socket ID: " << clientSocket << std::endl;
+
+		if (connect(clientSocket, addrinfoIt->ai_addr, (int)addrinfoIt->ai_addrlen) == SOCKET_ERROR) {
+			std::cout << "Connect failed for one address, trying next..." << std::endl;
+			continue;
+		}
+		std::cout << "Successfully connected to server!" << std::endl;
+		return clientSocket;
+	}
+	throw std::runtime_error("Unable to connect to server after trying all available addresses.");
+}
+
+void handleServer(SocketWrapper clientSocket) {
+	std::vector<char> recvbuf(BUFFER_LEN);
+	do {
+		std::cout << "enter your message or type 'quit' to exit" << std::endl;
+		std::string userInput;
+		std::getline(std::cin, userInput);
+		if (userInput == "quit") {
+			break;
+		}
+		if (userInput.empty()) {
+			continue;
+		}
+		int result = send(clientSocket, userInput.c_str(), (int)userInput.length(), 0);
+		if (result == SOCKET_ERROR) {
+			throw WinsockException("send failed", WSAGetLastError());
+		}
+
+		result = recv(clientSocket, recvbuf.data(), static_cast<int>(recvbuf.size()), 0);
+		if (result == SOCKET_ERROR) {
+			throw WinsockException("recv failed", WSAGetLastError());
+		}
+		if (result > 0) {
+			std::string serverResponse(recvbuf.data(), result);
+			std::cout << serverResponse << std::endl;
+		}
+		else if (result == 0) {
+			std::cout << "Connection closed by server." << std::endl;
+		}
+
+	} while (true);
+}
