@@ -7,10 +7,15 @@
 #include <stdio.h>
 #include <iostream>
 #include <vector>
+#include <thread>
+#include <mutex>
 
 #include "WinsockException.h"
 #include "SocketWrapper.h"
 #include "WSAWrapper.h"
+
+std::vector<SOCKET> clientSockets;
+std::mutex clientSocketsMutex;
 
 constexpr const char* DEFAULT_PORT = "8080";
 constexpr int BUFFER_LEN = 512;
@@ -42,13 +47,22 @@ int main() {
 
 		std::cout << "-------------------------" << std::endl;
 		std::cout << "Waiting for incoming connections..." << std::endl;
+		while (true) {
+			SocketWrapper clientSocket(accept(listenSocket, NULL, NULL));
+			if (clientSocket == INVALID_SOCKET) {
+				std::cerr << "accept failed with error: " << WSAGetLastError() << std::endl;
+				continue;
+			}
+			std::cout << "Client Connected! Socket ID: " << clientSocket << std::endl;
 
-		SocketWrapper clientSocket(accept(listenSocket, NULL, NULL));
-		if (clientSocket == INVALID_SOCKET) {
-			throw WinsockException("accept failed.", WSAGetLastError());
+			{
+				std::lock_guard<std::mutex> lock(clientSocketsMutex);
+				clientSockets.push_back(clientSocket.get());
+			}
+
+			std::thread clientThread(handleClient, std::move(clientSocket));
+			clientThread.detach();
 		}
-		std::cout << "Client Connected! Socket ID: " << clientSocket << std::endl;
-		handleClient(std::move(clientSocket));
 		
 	}
 	catch(const std::exception& e){
@@ -100,6 +114,7 @@ void resolveAddr(const char* port, addrinfo*& outAddrInfo) {
 }
 
 void handleClient(SocketWrapper clientSocket) {
+	SOCKET socket = clientSocket.get();
 	std::cout << "Handling client on socket " << clientSocket << std::endl;
 	std::vector<char> recvbuf(BUFFER_LEN);
 	int result{};
@@ -109,11 +124,12 @@ void handleClient(SocketWrapper clientSocket) {
 			std::string clientMessage(recvbuf.data(), result);
 			std::cout << clientSocket << " said: " << clientMessage << std::endl;
 
-			std::string serverResponse = "Server received: " + clientMessage;
-			int sendResult = send(clientSocket, serverResponse.c_str(), static_cast<int>(serverResponse.length()), 0);
-			if (sendResult == SOCKET_ERROR) {
-				std::cerr << "send failed with error: " << WSAGetLastError() << std::endl;
-				break;
+			std::lock_guard<std::mutex> lock(clientSocketsMutex);
+
+			for (SOCKET otherClientSocket : clientSockets) {
+				if (otherClientSocket != socket) {
+					send(otherClientSocket, clientMessage.c_str(), result, 0);
+				}
 			}
 		}
 		else if (result == 0) {
@@ -124,4 +140,11 @@ void handleClient(SocketWrapper clientSocket) {
 			break;
 		}
 	} while (result > 0);
+
+	{ 
+		std::lock_guard<std::mutex> lock(clientSocketsMutex);
+		clientSockets.erase(std::remove(clientSockets.begin(), clientSockets.end(), socket), clientSockets.end());
+	}
+
+	std::cout << "Finished handling client " << socket << std::endl;
 }

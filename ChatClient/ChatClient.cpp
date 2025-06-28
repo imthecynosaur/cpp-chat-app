@@ -6,6 +6,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <thread>
 
 #include "WinsockException.h"
 #include "SocketWrapper.h"
@@ -15,9 +16,14 @@ constexpr const char* SERVER_ADDRESS = "127.0.0.1";
 constexpr const char* DEFAULT_PORT = "8080";
 constexpr int BUFFER_LEN = 512;
 
+std::atomic < bool > isClientRunning = true;
+
+
 void resolveServerAddr(addrinfo*& serverAddrinfo);
 SocketWrapper createClientSocket(addrinfo* serverAddrinfo);
-void handleServer(SocketWrapper clientSocket);
+void receiveMessages(SocketWrapper& socket);
+void sendMessage(const SocketWrapper& clientSocket);
+
 
 struct AddrInfoDeleter {
 	void operator() (addrinfo* ptr) const {
@@ -37,8 +43,11 @@ int main() {
 		std::unique_ptr<addrinfo, AddrInfoDeleter> serveraddrinfo(rawAddrPtr);
 		SocketWrapper clientSocket = createClientSocket(serveraddrinfo.get());
 
-		std::cout << "trying to send to server" << std::endl;
-		handleServer(std::move(clientSocket));
+		std::thread receiverThread(receiveMessages, std::ref(clientSocket));
+		receiverThread.detach();
+
+		sendMessage(clientSocket);
+		isClientRunning = false;
 	}
 	catch (const std::exception& e) {
 		std::cerr << "Error: " << e.what() << std::endl;
@@ -85,34 +94,55 @@ SocketWrapper createClientSocket(addrinfo* serverAddrinfo) {
 	throw std::runtime_error("Unable to connect to server after trying all available addresses.");
 }
 
-void handleServer(SocketWrapper clientSocket) {
+void receiveMessages(SocketWrapper& socket) {
 	std::vector<char> recvbuf(BUFFER_LEN);
-	do {
-		std::cout << "enter your message or type 'quit' to exit" << std::endl;
-		std::string userInput;
+	int result;
+
+	while (isClientRunning) {
+		result = recv(socket, recvbuf.data(), static_cast<int>(recvbuf.size()), 0);
+
+		if (result > 0) {
+			std::string serverMessage(recvbuf.data(), result);
+			std::cout << "\r" << std::string(80, ' ') << "\r";
+			std::cout << serverMessage << std::endl;
+			std::cout << "You: " << std::flush;
+		}
+		else if (result == 0) {
+			std::cout << "\rConnection to server lost." << std::endl;
+			isClientRunning = false;
+			break;
+		}
+		else {
+			if (isClientRunning) {
+				std::cerr << "\rrecv failed with error: " << WSAGetLastError() << std::endl;
+				isClientRunning = false;
+			}
+			break;
+		}
+	}
+	std::cout << "Receiver thread finished." << std::endl;
+}
+
+void sendMessage(const SocketWrapper& clientSocket) {
+	std::string userInput;
+	while (isClientRunning) {
+		std::cout << "You: ";
 		std::getline(std::cin, userInput);
+
+		if (std::cin.eof() || !isClientRunning) {
+			break;
+		}
+
 		if (userInput == "quit") {
 			break;
 		}
-		if (userInput.empty()) {
-			continue;
-		}
-		int result = send(clientSocket, userInput.c_str(), (int)userInput.length(), 0);
-		if (result == SOCKET_ERROR) {
-			throw WinsockException("send failed", WSAGetLastError());
-		}
 
-		result = recv(clientSocket, recvbuf.data(), static_cast<int>(recvbuf.size()), 0);
-		if (result == SOCKET_ERROR) {
-			throw WinsockException("recv failed", WSAGetLastError());
+		if (!userInput.empty()) {
+			int sendResult = send(clientSocket, userInput.c_str(), (int)userInput.length(), 0);
+			if (sendResult == SOCKET_ERROR) {
+				std::cerr << "send failed with error: " << WSAGetLastError() << std::endl;
+				break;
+			}
 		}
-		if (result > 0) {
-			std::string serverResponse(recvbuf.data(), result);
-			std::cout << serverResponse << std::endl;
-		}
-		else if (result == 0) {
-			std::cout << "Connection closed by server." << std::endl;
-		}
-
-	} while (true);
+	}
 }
