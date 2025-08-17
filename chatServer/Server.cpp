@@ -1,206 +1,124 @@
-//#define WIN32_LEAN_AND_MEAN
-//
-//#include <Windows.h>
-//#include <WinSock2.h>
-//#include <WS2tcpip.h>
-//#include <iostream>
-//#include <string>
-//#include <vector>
-//
-//#include "WinsockException.h"
-//#include "WSAWrapper.h"
-//#include "SocketWrapper.h"
-//
-//constexpr const char* DEFAULT_PORT = "8080";
-//constexpr int BUFFER_LEN = 512;
-//
-//bool InitializeWinsock();
-//
-//bool resolveAddr(addrinfo*&);
-//
-//SOCKET createServerSocket(addrinfo* serverAddrInfo);
-//
-//void handleClient(SOCKET clientSocket);
-//
-//int main() {
-//
-//	SOCKET serverSocket = INVALID_SOCKET;
-//	SOCKET clientSocket = INVALID_SOCKET;
-//
-//	struct addrinfo* serverAddrInfo { nullptr };
-//
-//	if (!InitializeWinsock()) 
-//		return 1;
-//
-//	if (!resolveAddr(serverAddrInfo))
-//		return 1;
-//
-//	serverSocket = createServerSocket(serverAddrInfo);
-//
-//
-//	std::cout << "Waiting for incoming connections..." << std::endl;
-//	clientSocket = accept(serverSocket, NULL, NULL);
-//	if (clientSocket == INVALID_SOCKET) {
-//		std::cerr << "accept failed with error: " << WSAGetLastError() << std::endl;
-//		closesocket(serverSocket);
-//		WSACleanup();
-//		return 1;
-//	}
-//	std::cout << "Client connected successfully. Client Socket ID: " << clientSocket << std::endl;
-//	
-//	handleClient(clientSocket);
-//
-//
-//
-//	std::cout << "Server is shutting down." << std::endl;
-//	if (closesocket(serverSocket) == SOCKET_ERROR) {
-//		std::cerr << "closesocket failed with error: " << WSAGetLastError() << std::endl;
-//		WSACleanup();
-//		return 1;
-//	}
-//	else {
-//		std::cout << "Server socket closed successfully." << std::endl;
-//	}
-//
-//	if (WSACleanup() != 0) {
-//		std::cerr << "WSACleanup failed with error: " << WSAGetLastError() << std::endl;
-//		return 1;
-//	}
-//	else {
-//		std::cout << "WSACleanup successful." << std::endl;
-//	}
-//
-//	std::cout << "Press Enter to exit." << std::endl;
-//	std::cin.get();
-//
-//	return 0;
-//}
-//
-//void handleClient(SOCKET clientSocket)
-//{
-//	int result{};
-//	std::cout << "Handling client: " << clientSocket << std::endl;
-//
-//	std::string clientMessage{};
-//	std::string serverResponse{};
-//	
-//	char recvbuf[BUFFER_LEN];
-//
-//	do {
-//		result = recv(clientSocket, recvbuf, BUFFER_LEN, 0);
-//		if (result < 0) {
-//			std::cerr << "something fucked up" << WSAGetLastError() << std::endl;
-//			closesocket(clientSocket);
-//		}
-//		else if (result == 0) {
-//			std::cout << "client disconnected... " << std::endl;
-//		}
-//		else {
-//			std::cout << "receievd " << result << " bytes from client" << std::endl;
-//			//std::string clientMessage(recvbuf, result);
-//			clientMessage = std::string(recvbuf, result);
-//			std::cout << "Client " << clientSocket << " said: " << clientMessage << std::endl;
-//			serverResponse = "Receieved: " + clientMessage;
-//			int sendResult = send(clientSocket, serverResponse.c_str(), (int)serverResponse.length(), 0);
-//			if (sendResult == SOCKET_ERROR) {
-//				std::cerr << "failed to reply to client, error: " << WSAGetLastError() << std::endl;
-//				closesocket(clientSocket);
-//				break;
-//			}
-//			std::cout << "sent " << sendResult << " bytes back to client";
-//		}
-//
-//	} while (result > 0);
-//
-//	std::cout << "closing client socket" << std::endl;
-//	closesocket(clientSocket);
-//	clientSocket = INVALID_SOCKET;
-//}
-//
-//SOCKET createServerSocket(addrinfo* serverAddrInfo)
-//{
-//	SOCKET serverSocket = socket(serverAddrInfo->ai_family, serverAddrInfo->ai_socktype, serverAddrInfo->ai_protocol);
-//	if (serverSocket == INVALID_SOCKET) {
-//		std::cerr << "socket failed with error: " << WSAGetLastError() << std::endl;
-//		freeaddrinfo(serverAddrInfo);
-//		WSACleanup();
-//		return 1;
-//	}
-//	std::cout << "Server socket created successfully! Socket number: " << serverSocket << std::endl;
-//
-//	int result = bind(serverSocket, serverAddrInfo->ai_addr, serverAddrInfo->ai_addrlen);
-//	if (result == SOCKET_ERROR) {
-//		std::cerr << "failed to bind socket, error: " << WSAGetLastError() << std::endl;
-//		freeaddrinfo(serverAddrInfo);
-//		closesocket(serverSocket);
-//		WSACleanup();
-//		return 1;
-//	}
-//	std::cout << "Socket bound successfully!" << std::endl;
-//
-//	freeaddrinfo(serverAddrInfo);
-//
-//	result = listen(serverSocket, SOMAXCONN);
-//	if (result == SOCKET_ERROR) {
-//		std::cerr << "failed to listen, error: " << WSAGetLastError() << std::endl;
-//		closesocket(serverSocket);
-//		WSACleanup();
-//		return 1;
-//	}
-//	std::cout << "server is now listening on port: " << DEFAULT_PORT << std::endl;
-//	return serverSocket;
-//}
-//
-//bool resolveAddr(addrinfo*& serverAddrInfo)
-//{
-//	int result;
-//	struct addrinfo hints {};
-//	ZeroMemory(&hints, sizeof(hints));
-//	hints.ai_family = AF_INET;
-//	hints.ai_socktype = SOCK_STREAM;
-//	hints.ai_flags = AI_PASSIVE;
-//	hints.ai_protocol = IPPROTO_TCP;
-//
-//	result = getaddrinfo(NULL, DEFAULT_PORT, &hints, &serverAddrInfo);
-//	if (result != 0) {
-//		std::cerr << "failed to resolve server address, error: " << result << std::endl;
-//		WSACleanup();
-//		return false;
-//	}
-//	std::cout << "Resolved Server address successfully!" << std::endl;
-//
-//	if (serverAddrInfo->ai_family == AF_INET) {
-//		SOCKADDR_IN* ipv4_addr = reinterpret_cast< SOCKADDR_IN*>(serverAddrInfo->ai_addr);
-//
-//		char ip_string[INET_ADDRSTRLEN];
-//		inet_ntop(AF_INET, &(ipv4_addr->sin_addr), ip_string, INET_ADDRSTRLEN);
-//		std::cout << "IP Address resolved by getaddrinfo: " << ip_string << std::endl;
-//
-//
-//		unsigned short port = ntohs(ipv4_addr->sin_port);
-//		std::cout << "Port resolved by getaddrinfo: " << port << std::endl;
-//	}
-//	return true;
-//}
-//
-//[[nodiscard]] bool InitializeWinsock() {
-//
-//	std::cout << "starting WSA..." << std::endl;
-//
-//	WSADATA wsaData;
-//	int result;
-//
-//	result = WSAStartup(MAKEWORD(2, 2), &wsaData);
-//	if (result != 0) {
-//		std::cerr << "failed to start WSA, error: " << WSAGetLastError() << " And result is: " << result << std::endl;
-//		return false;
-//	}
-//	std::cout << "WinSock initialized." << std::endl;
-//	std::cout << "WSAStartup successful." << std::endl;
-//	std::cout << " Version: " << LOBYTE(wsaData.wVersion) << "." << HIBYTE(wsaData.wVersion) << std::endl;
-//	std::cout << " Description: " << wsaData.szDescription << std::endl;
-//	std::cout << " Status: " << wsaData.szSystemStatus << std::endl;
-//	std::cout << "----------------------" << std::endl;
-//	
-//	return true;
-//}
+#include "Server.h"
+
+#include <WinSock2.h>
+#include <WS2tcpip.h>
+#include <iostream>
+#include <string>
+#include <algorithm>
+#include <thread>
+#include "WinsockException.h"
+#include "SocketWrapper.h"
+
+
+Server::Server(const char* port) :
+	port(port), listenSocket(INVALID_SOCKET) {
+	resolveServerAddress();
+	createListenSocket();
+}
+
+Server::~Server() {
+	if (listenSocket != INVALID_SOCKET) {
+		closesocket(listenSocket);
+	}
+	if (serverAddrInfo) {
+		freeaddrinfo(serverAddrInfo);
+	}
+}
+
+void Server::run() {
+	acceptClients();
+}
+
+void Server::resolveServerAddress(){
+	addrinfo hints{};
+	hints.ai_family = AF_INET;
+	hints.ai_flags = AI_PASSIVE;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_protocol = IPPROTO_TCP;
+
+	int result = getaddrinfo(NULL, port, &hints, &serverAddrInfo);
+	if (result != 0) {
+		throw WinsockException("getAddrInfo failed", result);
+	}
+	std::cout << "Server address info resloved." << std::endl;
+}
+
+void Server::createListenSocket() {
+	listenSocket = socket(serverAddrInfo->ai_family, serverAddrInfo->ai_socktype, serverAddrInfo->ai_protocol);
+	if (listenSocket == INVALID_SOCKET) {
+		throw WinsockException("socket creation failed", WSAGetLastError());
+	}
+	if (bind(listenSocket, serverAddrInfo->ai_addr, (int)serverAddrInfo->ai_addrlen) == SOCKET_ERROR) {
+		closesocket(listenSocket);
+		throw WinsockException("bind failed", WSAGetLastError());
+	}
+	if (listen(listenSocket, SOMAXCONN) == SOCKET_ERROR) {
+		closesocket(listenSocket);
+		throw WinsockException("listen failed", WSAGetLastError());
+	}
+	std::cout << "server is listening on port " << port << " ..." << std::endl;
+}
+
+void Server::acceptClients() {
+	std::cout << "server is waiting for incoming connections..." << std::endl;
+
+	while (true) {
+		SOCKET rawClientSocket = accept(listenSocket, NULL, NULL);
+		if (rawClientSocket == INVALID_SOCKET) {
+			std::cerr << "accept failed with error: " << WSAGetLastError() << std::endl;
+			continue;
+		}
+
+		SocketWrapper clientSocket(rawClientSocket);
+		std::cout << "Client connected! socket: " << clientSocket.get() << std::endl;
+		{
+			std::lock_guard<std::mutex> lock(clientSocketsMutex);
+			clientSockets.push_back(clientSocket.get());
+		}
+
+		std::thread clientThread(&Server::handleClinet, this, std::move(clientSocket));
+		clientThread.detach();
+	}
+}
+
+void Server::handleClinet(SOCKET clientSocket) {
+	std::cout << "Handling communication for client on socket: " << clientSocket << std::endl;
+	std::vector<char> recvbuf(bufferLen);
+	int result;
+
+	do {
+		result = recv(clientSocket, recvbuf.data(), static_cast<int>(recvbuf.size()), 0);
+		if (result > 0) {
+			broadcastMessage(clientSocket, recvbuf.data(), result);
+		}
+		else if (result == 0) {
+			std::cout << "Client " << clientSocket << " disconnected." << std::endl;
+		}
+		else {
+			std::cerr << "recv failed for client " << clientSocket << "with error: " << WSAGetLastError() << std::endl;
+		}
+	} while (result > 0);
+
+	{
+		std::lock_guard<std::mutex> lock(clientSocketsMutex);
+		clientSockets.erase(std::remove(clientSockets.begin(), clientSockets.end(), clientSocket), clientSockets.end());
+	}
+
+	closesocket(clientSocket);
+	std::cout << "Finished handling client " << clientSocket << std::endl;
+}
+
+void Server::broadcastMessage(SOCKET senderSocket, const char* message, int messageLen) {
+	std::string senderID = std::to_string(senderSocket);
+	std::string finalMessage = "[client " + senderID + "]: " + std::string(message, messageLen);
+
+	std::lock_guard<std::mutex> lock(clientSocketsMutex);
+
+	std::cout << "[DEBUG] Broadcasting message: " << finalMessage << std::endl;
+
+	for (SOCKET otherClinetSocket : clientSockets) {
+		if (otherClinetSocket != senderSocket) {
+			send(otherClinetSocket, finalMessage.c_str(), static_cast<int>(finalMessage.length()), 0);
+		}
+	}
+}
